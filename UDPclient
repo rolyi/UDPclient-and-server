@@ -1,0 +1,77 @@
+#Run by python 3.12 in pycharm
+import socket
+import time
+#Get host and port from command line
+def host_port():
+    host = input("Enter hostname: ")
+    port = int(input("Enter port: "))
+    return host, port
+#Set timeout period and the max retries
+def udp_client(file_path, host, port, timeout=5, max_retries=3):
+    #Create a UDP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #Bind to any available local address and port
+    sock.bind(('0.0.0.0', 0))
+    try:
+        print("Sending 'ready to sent' message...")
+        sock.sendto(b'ready to sent', (host, port))
+        # Wait for ready
+        retries = 0
+        while retries < max_retries:
+            try:
+                sock.settimeout(timeout)
+                a, _ = sock.recvfrom(1024)
+                if a.decode() == 'ready':
+                    break
+            except socket.timeout:
+                print(f"Timeout waiting for 'ready' message, retrying ({retries + 1}/{max_retries})...")
+                retries += 1
+                sock.sendto(b'ready to sent', (host, port))
+        else:
+            print("Max retries reached, giving up.")
+            return
+        #Open in binary read mode
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        print("Sending file size...")
+        # Sent the size to server
+        sock.sendto(str(len(data)).encode(), (host, port))
+        # Wait for ready_
+        retries = 0
+        while retries < max_retries:
+            try:
+                sock.settimeout(timeout)
+                a, _ = sock.recvfrom(1024)
+                if a.decode() == 'ready_':
+                    break
+            except socket.timeout:
+                print(
+                    f"Timeout waiting for 'ready_' message to send file data, retrying ({retries + 1}/{max_retries})...")
+                retries += 1
+                sock.sendto(str(len(data)).encode(), (host, port))
+        else:
+            print("Max retries reached, giving up.")
+            return
+            # sent data to server
+        print("Sending file data...")
+        sock.sendto(data, (host, port))
+        # Wait for ok
+        retries = 0
+        while retries < max_retries:
+            try:
+                sock.settimeout(timeout)
+                a, _ = sock.recvfrom(1024)
+                if a.decode() == 'ok':
+                    print("File sent and server confirmed.")
+                    break
+            except socket.timeout:
+                print(f"Timeout waiting for 'ok' message, retrying ({retries + 1}/{max_retries})...")
+                retries += 1
+                sock.sendto(data, (host, port))
+        else:
+            print("Max retries reached, giving up.")
+    finally:
+        sock.close()
+if __name__ == "__main__":
+    host, port = host_port()
+    udp_client("C:/Users/29453/Downloads/example.txt", host, port)
