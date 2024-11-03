@@ -1,0 +1,72 @@
+#Run by python 3.8.10 in ubuntu 20.04.1
+import socket
+import time
+#Set timeout period and the max retries
+def udp_server(file_path, host='192.168.74.129', port=10000, timeout=5,max_retries=3):
+    # Create a UDP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # Bind to local address and port
+    sock.bind((host, port))
+    print(f"Server listening on {host}:{port}")
+    try:
+        while True:
+            # Receive initial message from client
+            a, b = sock.recvfrom(1024)
+            if a.decode() == 'ready to sent':
+                #Get the client host and port from b
+                client_host, client_port = b
+                print(f"Received 'ready to sent' from {client_host}:{client_port}")
+                # Send 'ready' to client
+                sock.sendto(b'ready', (client_host, client_port))
+                print("Sent 'ready' to client")
+                retries = 0
+                #Wait for file size
+                while retries < max_retries:
+                    try:
+                        sock.settimeout(timeout)
+                        a, _ = sock.recvfrom(1024)
+                        if a.decode():
+                            print(f"Received {int(a)} bytes of file data")
+                            break
+                    except socket.timeout:
+                        print(
+                            f"Timeout waiting for the file size, retrying ({retries + 1}/{max_retries})...")
+                        retries += 1
+                        sock.sendto(b'ready', (client_host, client_port))
+                else:
+                    print("Max retries reached, giving up.")
+                    return
+                print("Sent 'ready_' to client")
+                sock.sendto(b'ready_', (client_host, client_port))
+                retries = 0
+                # Wait for data
+                while retries < max_retries:
+                    try:
+                        sock.settimeout(timeout)
+                        data, _ = sock.recvfrom(int(a))
+                        if data.decode():
+                            with open(file_path, 'wb') as f:
+                                f.write(data)
+                                break
+                    except socket.timeout:
+                        print(
+                            f"Timeout waiting for file data, retrying ({retries + 1}/{max_retries})...")
+                        retries += 1
+                        sock.sendto(b'ready_', (client_host, client_port))
+                else:
+                    print("Max retries reached, giving up.")
+                    return
+                print("File received and saved.")
+                #Sent three ok to client to make sure client can get
+                sock.sendto(b'ok', (client_host, client_port))
+                sock.sendto(b'ok', (client_host, client_port))
+                sock.sendto(b'ok', (client_host, client_port))
+                break
+    #Close by usr
+    except KeyboardInterrupt:
+        print("Server shutting down...")
+    finally:
+        sock.close()
+    sock.close()
+if __name__ == "__main__":
+    udp_server('received_example.txt')
